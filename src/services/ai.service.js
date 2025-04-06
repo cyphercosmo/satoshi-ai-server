@@ -1,8 +1,10 @@
 const { constructPrompt } = require('../utils/prompt-template');
+const axios = require('axios');
+require('dotenv').config();
 
 /**
  * Mock responses for Satoshi AI
- * These will be used until the fine-tuned model is ready
+ * These will be used as fallback if the API call fails
  */
 const MOCK_RESPONSES = [
   "The nature of Bitcoin is such that once version 0.1 was released, the core design was set in stone for the rest of its lifetime.",
@@ -17,7 +19,7 @@ const MOCK_RESPONSES = [
 
 /**
  * AI Service
- * Handles communication with the AI model (or mock responses for now)
+ * Handles communication with the AI model
  */
 class AIService {
   /**
@@ -30,19 +32,61 @@ class AIService {
     try {
       // Construct prompt using the template
       const prompt = constructPrompt({ messages, activeTools });
-      
       // Check if this is a tool-using scenario
       if (activeTools.length > 0) {
         return this.handleToolBasedResponse(prompt);
       }
-      
-      // In a real implementation, this would call the actual AI model
-      // For now, return a mock response
-      return this.getMockResponse();
+      // Make a real API call to the AI service
+      return await this.callAIApi(prompt.messages);
     } catch (error) {
       console.error('AI Service Error:', error);
-      throw new Error('Failed to generate AI response');
+      console.log('Falling back to mock response due to error');
+      return this.getMockResponse();
     }
+  }
+  
+  /**
+   * Call the AI API to generate a response
+   * @param {Array} messages - Array of conversation messages
+   * @returns {Promise<Object>} The AI's response
+   */
+  static async callAIApi(messages) {
+    const apiUrl = process.env.AI_SERVICE_URL;
+    const apiKey = process.env.AI_SERVICE_API_KEY;
+    
+    if (!apiKey) {
+      throw new Error('AI service API key not found in environment variables');
+    }
+    
+    const data = JSON.stringify({
+      "messages": messages,
+      "output_type": "text",
+      "max_tokens": 1000,
+      "temperature": 0.2
+    });
+    
+    const config = {
+      method: 'post',
+      maxBodyLength: Infinity,
+      url: `${apiUrl}/generate`,
+      headers: { 
+        'Content-Type': 'application/json', 
+        'x-api-key': apiKey
+      },
+      data: data
+    };
+    
+    const response = await axios.request(config);
+    const responseData = response.data;
+    
+    // Return the response in the expected format with all data
+    return {
+      role: 'assistant',
+      content: responseData.text || responseData.message || JSON.stringify(responseData),
+      recommendations: responseData.recommendations || [],
+      token_cost: responseData.token_cost || 0,
+      raw_response: responseData // Store the full raw response for debugging
+    };
   }
   
   /**

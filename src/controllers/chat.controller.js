@@ -56,7 +56,9 @@ const chatController = {
       conversation = ConversationModel.addMessage(
         conversation.id,
         aiResponse.role,
-        aiResponse.content
+        aiResponse.content,
+        aiResponse.recommendations,
+        aiResponse.token_cost
       );
       
       return res.status(200).json({
@@ -67,7 +69,8 @@ const chatController = {
             messages: conversation.messages.slice(-2), // Return just the latest exchange
             updatedAt: conversation.updatedAt
           },
-          response: aiResponse.content
+          recommendations: aiResponse.recommendations,
+          token_cost: aiResponse.token_cost
         }
       });
     } catch (error) {
